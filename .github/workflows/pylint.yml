@@ -23,4 +23,4 @@ jobs:
         id: setup-ffmpeg
         uses: ./
       - run: ffmpeg -version
-      - run: ffprobe -version
+      - run: ffmpeg -i input.mp4 -r 30 -filter:v "setpts=1.0*PTS" output1.mp4
