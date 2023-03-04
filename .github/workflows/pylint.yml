@@ -1,0 +1,15 @@
+name: Pylint
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10"]
+    steps:
+  - uses: actions/checkout@v3
+  - uses: FedericoCarboni/setup-ffmpeg@v2
+    id: setup-ffmpeg
+  - run: ffmpeg -i input.mp4 -r 30 -filter:v "setpts=1.0*PTS" output1.mp4
