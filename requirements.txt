@@ -1,0 +1,6 @@
+python-telegram-bot
+psutil
+httpx
+bs4
+flask
+lxml
