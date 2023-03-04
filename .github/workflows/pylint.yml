@@ -1,15 +1,26 @@
-name: Pylint
+name: Tests
 
-on: [push]
+on:
+  push:
+    paths-ignore:
+      - '**.md'
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 2
+
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
     steps:
-  - uses: actions/checkout@v3
-  - uses: FedericoCarboni/setup-ffmpeg@v2
-    id: setup-ffmpeg
-  - run: ffmpeg -i input.mp4 -r 30 -filter:v "setpts=1.0*PTS" output1.mp4
+      - uses: actions/checkout@v3
+      - name: Run FedericoCarboni/setup-ffmpeg
+        uses: ./
+      - name: Run FedericoCarboni/setup-ffmpeg
+        id: setup-ffmpeg
+        uses: ./
+      - run: ffmpeg -version
+      - run: ffprobe -version
