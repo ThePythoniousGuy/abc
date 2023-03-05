@@ -1,58 +1,85 @@
-from telegram.ext import *
-from telegram import *
-import logging
+
+from pyrogram import *
+from pyrogram.types import (
+    ReplyKeyboardMarkup,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton)
+
+
+import os
+import sys
 import time
-import telegram
-import threading
-import flask
 import html
-import psutil
-import shutil
 import httpx
+try:
+    import psutil
+except BaseException:
+    pass
+import shutil
+import logging
+import asyncio
+import aiofiles
 
 
-# MDC EXPORT -> ROBOTER403
-key = "5656447564:AAFr26Wb7lzWQe8XUA_EbGtdhBFwakOOUuU"
-
-# Hello Cat
-key = "5364216031:AAGEGh15w8-HDTRh5gRi1KxAV6eo1RkgRms"
-
-#ptb
-key = "5898931098:AAGrI-4q-9_OshOAolbAWnsYPJiQnnGrCU4"
-
-# Logging what's happening
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO)
-
-
-def mark2(text): return telegram.helpers.escape_markdown(str(text), 2)
+# Helpers
+try:
+    import fetch_playlist
+    import pytube_fetch
+except ImportError as e:
+    import Yt.fetch_playlist as fetch_playlist
+    import Yt.pytube_fetch as pytube_fetch
 
 
 def esml(x): return html.escape(str(x))
 
 
-HTTPX_CLIENT = {"client": httpx.AsyncClient()}
+inMark = InlineKeyboardMarkup
+inButton = InlineKeyboardButton
+
+# Logging info
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO)
 
 
-# -------------- Re usable code ------------
-
-async def ping(u, c):
-    up = u.effective_message
-    s = time.perf_counter()
-    m = await up.reply_text("<b>Checking...</b>", quote=True)
-    e = time.perf_counter()
-    try:
-        await m.edit_text(f"<b>Ping: {(e-s)*1000:.2f} ms</b>")
-    except Exception as e:
-        print(e)
+def debug(text, filename: str = ""):
+    with open(f"debug{filename}.txt", "w", encoding="utf8")as f:
+        f.write(str(text))
 
 
-async def send(u, c):
-    up = u.effective_message
-    user = u.effective_user.id
-    await c.bot.sendDocument(user, open("input.mp4"))
-    await c.bot.sendDocument(user, open("input.mp4"))
+def clear():
+    for i in os.listdir():
+        if i.endswith(".session"):
+            os.remove(i)
+
+
+def delete_prev():
+    for i in os.listdir():
+        if i.split('.')[-1] in "mp4 mp4 mkv 3gp".split():
+            os.remove(i)
+
+
+# delete_prev()
+
+
+admin = 5596148289
+api_id = 10661093
+api_hash = "ffa39e7d5836716e9a084233b828ae34"
+key = "5877028651:AAFz5Fd_swxSZyqeCkY96hzlbkgL1J0E_C4"
+
+# @ytgitaction
+key = "5962713812:AAEdrzBgzEScRzh0iBdyAPl8DrM7GyDOUNQ"
+
+key = "5919367026:AAERLPSPBCXPH0sDeBR14Dr6xbCMlNDq8JU"
+
+bot = Client("Youtube1", api_id, api_hash, bot_token=key)
+
+
+@bot.on_message(filters.command("start"))
+async def start_command(c, m):
+    debug(m)
+    await m.reply("<b>Alive</b>")
 
 
 # -------- Getting Server Details --------
@@ -68,7 +95,6 @@ def get_system_details():
     left_d = f"{free/ _:.2f}"
     ug_d = esml(f"{used/total*100:.2f}")
     say = f"""\
-<b>---  VPS  ---</b>
 CPU : <b>{cpu} Cores</b>
 <b><u>       RAM      </u></b>
 Total : <b>{all_m} GB</b>
@@ -83,107 +109,269 @@ Usage : <b>100/{ug_d} %</b>
     return say
 
 
-async def server_c(u, c):
-    user_id = u.effective_user.id
-    chat_id = u.effective_chat.id
+@bot.on_message(filters.command("server"))
+async def server_c(c, m):
     say = get_system_details()
-    await c.bot.sendMessage(chat_id, say)
+    await m.reply(say)
 
 
-async def contact(u, c):
-    say = f"""\
-Give your Feedback and Suggestions in <b>@RoboterBotsChat</b>
-
-Channel: <b>@RoboterBots</b>
-Developer: <b>@Roboter403</b>
-    """
-    await u.effective_message.reply_text(say)
-
-
-async def info(u, c):
-    user_id = u.effective_user.id
-    chat_id = u.effective_chat.id
-    fn = esml(u.effective_user.first_name)
-    ln = esml(u.effective_user.last_name)
-    un = u.effective_user.username
-    ulink = f"""
-<a href="{f'tg://user?id={user_id}'if not un else f't.me/{un}'}">{fn}</a>
-            """.strip()
-    un = esml(un)
-    date = esml(u.effective_message.date)
-    profile_photos = await c.bot.get_user_profile_photos(user_id)
-
-    say = f"""
-👆🏻<u><b>Your Profile Photo</b></u> 👌🏻
-
-<b>User ID     :</b> <code>{user_id}</code>
-<b>Chat ID     :</b> <code>{chat_id}</code>
-<b>First Name :</b> <i>{fn}</i>
-<b>Last Name  :</b> <i>{ln}</i>
-<b>Username   : @{un}</b>
-<b>User Link  :</b> {ulink}
-<b>Date       : {date[:-6]}
-Time Zone   : +00:00 UTC</b>
-
-<i>To copy your User ID, just tap on it.</i>
-    """
-    pps = profile_photos["photos"]
-
-    if pps != []:
-        one = pps[0][-1]["file_id"]
-        await c.bot.sendPhoto(chat_id, one, caption=say)
-    else:
-        await c.bot.sendMessage(chat_id, say[40:])
-
-
-async def start_commmand(update, context) -> None:
-    msg = "Hello there!\nThis is the start command."
-    await update.effective_message.reply_text(msg)
-
-
-async def cute_cats(update, context) -> None:
-    chatid = update.effective_chat.id
-    endpoint = "https://api.thecatapi.com/v1/images/search"
-    client = HTTPX_CLIENT.get("client")
+@bot.on_message(filters.command(["down", "download"]))
+async def custom_download(c, m):
     try:
-        r = (await client.get(endpoint)).json()[0]["url"]
-        # print(r)
-        await context.bot.sendPhoto(chatid, r)
+        url = m.text.split()[1]
+    except BaseException:
+        await m.reply("<b>Please give url after /down</b>")
+        return
+
+    mes_id = str(m.id)
+
+    x = await m.reply(f"""<b>Downloading...\nUrl: <a href="{url}">{url}</a></b>""")
+
+    do = await pytube_fetch.async_download(url, mes_id, m=x)
+    await x.edit_text("<b>Downloaded. Now uploading.</b>")
+    filename = do.get("filename")
+    await c.send_document(m.chat.id, open(filename, "rb"))
+
+    os.remove(filename)
+
+
+@bot.on_message(filters.command("ping"))
+async def ping(c, m):
+    s = time.time()
+    x = await m.reply("<b>Checking...</b>")
+    await x.edit_text(f"<b>Ping: {(time.time()-s)*1000:.2f} ms</b>")
+
+
+async def download_other(link, message, quality, number, outof):
+    yturl = link
+    x = await message.edit_text(f"<b>Downloading {esml(link)}</b>...")
+    edit_text = x.edit_text
+    await edit_text("<b>Processing...</b>")
+    loop = asyncio.get_running_loop()
+    fn = f"{message.id}-{number}-{outof}.mp4"
+
+    d = {
+        "link": yturl,
+        "quality": quality,
+        "filename": fn,
+        "message": message,
+        "loop": asyncio.get_running_loop(),
+        "stat": (number, outof)}
+
+    try:
+        got = await loop.run_in_executor(None, pytube_fetch.download_pytube, d)
+        title = got.get("title")
     except Exception as e:
         print(e)
-        HTTPX_CLIENT["client"] = httpx.AsyncClient()
+        try:
+            pass  # os.remove(fn)
+        except BaseException:
+            pass
+        await edit_text(f"<b>An error occurred.\nPlease try again</b>\n<pre>{esml(e)}</pre>")
 
 
-# Keep alive
-app = flask.Flask('')
-bbb = time.time()
-@app.route('/')
-def home(
-): return f"Alive on the mercy of Allah (SWT)<b><b>Alive for {(bbb-time.time())/60/60:.2f} hours"
-def run(): app.run(host='0.0.0.0', port=8080)
-def keep_alive(): t = threading.Thread(target=run); t.start()
+async def get_playlist(c, m):
+    text = m.text
+    error = False
+    try:
+        quality = text.split()[1]
+        say = f"Downloading the videos in {quality}"
+    except IndexError as e:
+        say = "Give the quality after playlust link"
+        quality = "720p"
+    except Exception as e:
+        print(e)
+        say = f"<b>Error!</b>\n<pre>{esml(e)}</pre>"
+        error = True
+
+    x = await m.reply(say)
+    if error:
+        return
+
+    links = fetch_playlist.get_all_links(text.split()[0])
+
+    if quality.isdecimal():
+        quality = str(quality) + 'p'
+    elif quality not in "720p 360p 144p":
+        await x.edit_text("<b>Invalid quality </b>")
+        return
+    outof = len(links)
+    for number, i in enumerate(links):
+        video_id = pytube_fetch.get_the_video_id(i)
+        url = f"https://youtube.com/watch?v={video_id}"
+        # await x.edit_text(f"Downloading {url} in {quality}")
+        await download_other(url, x, quality, number + 1, outof)
+    await x.edit_text(f"Done All of {url}")
 
 
-def main():
-    df = Defaults(parse_mode=constants.ParseMode.HTML)
-    app = ApplicationBuilder().token(key).defaults(df).connection_pool_size(
-        333).write_timeout(100).read_timeout(100).build()
+@bot.on_message(filters.text)
+async def handle_it(c, m):
+    text = m.text
 
-    # Command Handlers...
-    start_h = CommandHandler("start", start_commmand, block=False)
+    if m.outgoing:
+        return
+    if not text.lower().startswith("http"):
+        await m.reply("<b>Maybe this isnt a link</b>")
+        return
+    if "playlist?list=" in text:
+        await get_playlist(c, m)
+        return
 
-    cat_h = CommandHandler("cat", cute_cats, block=False)
-    app.add_handler(start_h)
-    app.add_handler(cat_h)
-    app.add_handler(CommandHandler("ping", ping, block=False))
-    app.add_handler(CommandHandler("server", server_c, block=False))
-    app.add_handler(CommandHandler("info", info, block=False))
-    app.add_handler(CommandHandler("send", send, block=False))
-    app.add_handler(CommandHandler("contact", contact, block=False))
+    x = await m.reply("<b>Processing...</b>")
+    loop = asyncio.get_running_loop()
+    data = await loop.run_in_executor(None, pytube_fetch.get_data_of_video, text)
 
-    app.run_polling()
+    title = data.get("title")
+    thumb = data.get("thumbnail")
+    reses = data.get("resolutions")
+    video_id = data.get("video_id")
+
+    say = f"""
+<b>{esml(title)}</b>
+<a href="{thumb}"> </a>
+
+<i>Select the desired format:</i>
+	"""
+
+    buttons = []
+
+    for i in reses:
+        a = [inButton(i, callback_data=f"video {video_id} {i}")]
+        k = len(buttons) - 1
+        if buttons and len(buttons[k]) == 1:
+            buttons[k] += a
+        else:
+            buttons.append(a)
+    buttons.append(
+        [inButton("Audio 128kbps", callback_data=f"audio {video_id}")])
+
+    await x.edit_text(say, reply_markup=inMark(buttons))
+
+
+temp = {}
+
+
+async def progress(current, total, client, message, start):
+    pct = current / total * 100
+    x = 1024**2
+    a = f"""
+<b>Uploaded {pct:.2f} % | {current/x:.2f} MB of {total/x:.2f} MB @ {current/x/(time.time()-start):.2f} MB/s </b>
+"""
+    print(a)
+    if time.time() - temp[message.id] >= 2:
+        await message.edit_text(a)
+        temp[message.id] = time.time()
+
+    # if (current * 100 / total) > 50:
+        # client.stop_transmission()
+
+
+@bot.on_callback_query()
+async def answer(c: Client, cq):
+    data = cq.data
+    chat_id = cq.from_user.id
+    mes_id = str(cq.message.id)
+
+    async def edit_text(text):
+        await cq.message.edit_text(str(text))
+
+    if data.startswith("video"):
+        data = data.split()
+        quality = data[2]
+        video_id = data[1]
+
+        await cq.answer(
+            f"{quality} Selected",
+            show_alert=False)
+
+        yturl = f"https://youtube.com/watch?v={video_id}"
+        await edit_text("<b>Processing...</b>")
+        loop = asyncio.get_running_loop()
+        fn = f"{mes_id}.mp4"
+
+        d = {
+            "link": yturl,
+            "quality": quality,
+            "filename": fn,
+            "message": cq.message,
+            "loop": loop}
+
+        try:
+            got = await loop.run_in_executor(None, pytube_fetch.download_pytube, d)
+            title = got.get("title")
+        except Exception as e:
+            try:
+                os.remove(fn)
+            except BaseException:
+                pass
+            await edit_text(f"<b>An error occurred.\nPlease try again</b>\n<pre>{esml(e)}</pre>")
+            # await c.send_message(admin, f"<pre>{esml(e)}</pre>")
+
+            return
+
+        await edit_text(f"<b>Downloaded. Now uploading to Telegram.\nTime taken: {got.get('time_taken')} s</b>")
+        print("Downloaded the file for", chat_id, title)
+
+        filename = got.get("filename")
+
+        s = time.time()
+        temp[int(mes_id)] = s
+        await c.send_document(chat_id, open(filename, "rb"), caption=title, file_name=f"{title}.mp4", progress=progress, progress_args=(c, cq.message, s))
+        del temp[int(mes_id)]
+        os.remove(filename)
+
+        await edit_text(f"<b>Downloaded in <i>{got.get('time_taken')} s</i>.\nUploaded in <i>{int(time.time()-s)}</i> s</b>")
+
+    elif data.startswith("audio"):
+        data = data.split()
+        video_id = data[1]
+
+        await cq.answer(
+            f"Audio 128kbps Selected",
+            show_alert=False)
+
+        yturl = f"https://youtube.com/watch?v={video_id}"
+        await edit_text("<b>Processing...</b>")
+        loop = asyncio.get_running_loop()
+        fn = f"{mes_id}.mp3"
+
+        d = {
+            "link": yturl,
+            "filename": fn,
+            "message": cq.message,
+            "loop": loop,
+            "audio": True}
+
+        try:
+            got = await loop.run_in_executor(None, pytube_fetch.download_pytube, d)
+            title = got.get("title")
+        except Exception as e:
+            try:
+                os.remove(fn)
+            except BaseException:
+                pass
+            await edit_text(f"<b>An error occurred.\nPlease try again</b>\n<pre>{esml(e)}</pre>")
+            # await c.send_message(admin, f"<pre>{esml(e)}</pre>")
+
+            return
+
+        await edit_text(f"<b>Downloaded. Now uploading to Telegram.\nTime taken: {got.get('time_taken')} s</b>")
+        print("Downloaded the file for", chat_id, title)
+
+        filename = got.get("filename")
+
+        s = time.time()
+        temp[int(mes_id)] = s
+        await c.send_document(chat_id, open(filename, "rb"), caption=title, file_name=f"{title}.mp3", progress=progress, progress_args=(c, cq.message, s))
+        del temp[int(mes_id)]
+        os.remove(filename)
+
+        await edit_text(f"<b>Downloaded in <i>{got.get('time_taken')} s</i>.\nUploaded in <i>{int(time.time()-s)}</i> s</b>")
+
+
+def run_main():
+    bot.run()
 
 
 if __name__ == "__main__":
-    # keep_alive()
-    main()
+    run_main()
