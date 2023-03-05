@@ -1,6 +1,9 @@
-python-telegram-bot
-psutil
+pyrogram
+google-api-python-client
 httpx
-bs4
-flask
+aiofiles
+psutil
+pytube
 lxml
+requests
+bs4
